@@ -1,0 +1,11 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: openslide
+Description: A library for reading whole slide images.
+
+Version: 3.4.1
+Libs: -L${libdir} -lopenslide
+Cflags: -I${includedir}/openslide
