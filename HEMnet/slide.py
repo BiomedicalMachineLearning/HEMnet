@@ -4,6 +4,7 @@
 
 from openslide import open_slide
 from PIL import Image, ImageOps, ImageChops
+import numpy as np
 
 def highest_mag(slide):
     """Returns the highest magnification for the slide
