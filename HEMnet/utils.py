@@ -1,6 +1,7 @@
 from PIL import Image, ImageOps, ImageChops
 import numpy as np
 import SimpleITK as sitk
+from skimage.exposure import histogram
 from skimage.filters import threshold_otsu
 
 ######################
@@ -37,24 +38,37 @@ def show_alignment(fixed_img, moving_img, prefilter = None):
     img_blue.putalpha(70)
     return Image.alpha_composite(img_red, img_blue)
 
-def transform_rgb(rgb_img, transform_param_map, resize = None):
-    r, g, b, = rgb_img.convert('RGB').split()
-    transformix = sitk.TransformixImageFilter()
-    transformix.SetTransformParameterMap(transform_param_map)
+def sitk_transform_rgb(moving_rgb_img, fixed_rgb_img, transform, interpolator = sitk.sitkLanczosWindowedSinc):
+    """Applies a Simple ITK transform (e.g. Affine, B-spline) to an RGB image
+    
+    The transform is applied to each channel
+    
+    Parameters
+    ----------
+    moving_rgb_img : Pillow Image 
+        This image will be transformed to produce the output image
+    fixed_rgb_img : Pillow Image
+        This reference image provides the output information (spacing, size, and direction) of the output image
+    transform : SimpleITK transform
+        Generated from image registration
+    interpolator : SimpleITK interpolator
+    
+    Returns
+    -------
+    rgb_transformed : Pillow Image
+        Transformed moving image 
+    """
     transformed_channels = []
-    for img in [r, g, b]:
-        img_itk = get_itk_from_pil(img)
-        transformix.SetMovingImage(img_itk)
-        transformix.Execute()
-        transformed_img = get_pil_from_itk(transformix.GetResultImage())
-        transformed_channels.append(transformed_img)
+    r_moving, g_moving, b_moving, = moving_rgb_img.convert('RGB').split()
+    r_fixed, g_fixed, b_fixed = fixed_rgb_img.convert('RGB').split()
+    for moving_img, fixed_img in [(r_moving, r_fixed), (g_moving, g_fixed), (b_moving, b_fixed)]:
+        moving_img_itk = get_itk_from_pil(moving_img)
+        fixed_img_itk = get_itk_from_pil(fixed_img)
+        transformed_img = sitk.Resample(moving_img_itk, fixed_img_itk, transform, 
+                            interpolator, 0.0, moving_img_itk.GetPixelID())
+        transformed_channels.append(get_pil_from_itk(transformed_img))
     rgb_transformed = Image.merge('RGB', transformed_channels)
-    if resize is None:
-        return rgb_transformed
-    else: 
-        downsample = max(rgb_transformed.size)/resize
-        final_size = tuple([np.int(np.round(dim/downsample)) for dim in rgb_transformed.size])
-        return rgb_transformed.resize(final_size, resample = Image.BICUBIC)
+    return rgb_transformed    
 
 #################
 # Image Filters #
@@ -118,3 +132,63 @@ def binary_array_to_pil(array):
             pixels[i,j] = int_list[i][j]
     return ImageOps.mirror(img).rotate(90, expand = True)
 
+def tile_gen(img, tile_size):
+    '''Generates tiles for Pillow images
+    '''
+    width, height = img.size
+    x_tiles = int(np.floor(width/tile_size))
+    y_tiles = int(np.floor(height/tile_size))
+    yield (x_tiles, y_tiles)
+    for y in range(y_tiles):
+        for x in range(x_tiles):
+            x_coord = x*tile_size
+            y_coord = y*tile_size
+            yield img.crop((x_coord, y_coord, np.int(np.round(x_coord+tile_size)), np.int(np.round(y_coord+tile_size))))
+            
+##################
+# Mask Functions #
+##################
+
+def threshold_otsu_masked(hed_img):
+    """Otsu thresholds the DAB component of an image
+    
+       Masks the background so only tissue regions are used for threshold calculation. 
+       Without masking, the background would likely be thresholded from the tissue due to background staining. 
+       
+    Parameters
+    ----------
+    hed_img : ndarray
+        The image in Hematoxylin, Eosin, DAB (HED) format, in a 3-D array of shape ``(.., .., 3)``
+        
+    Returns
+    -------
+    threshold : float
+        Pixel threshold value that best segments the DAB stain, as determined by the ostu method
+    """
+    dab = -hed_img[:, :, 2]
+    hem = -hed_img[:,:, 0]
+    hem_thresh = threshold_otsu(hem)
+    hem_binary_otsu = hem > hem_thresh
+    #Use binary mask to mask out background of DAB images
+    dab_masked = np.where(hem_binary_otsu == False, dab, 0)
+    dab_values = np.array([i for i in dab_masked.ravel() if i != 0])
+    #Otsu Thresholding
+    hist, bin_centers = histogram(dab_values, 256)
+    hist = hist.astype(float)
+    # class probabilities for all possible thresholds
+    weight1 = np.cumsum(hist)
+    weight2 = np.cumsum(hist[::-1])[::-1]
+    # class means for all possible thresholds
+    mean1 = np.cumsum(hist * bin_centers) / weight1
+    mean2 = (np.cumsum((hist * bin_centers)[::-1]) / weight2[::-1])[::-1]
+    # Clip ends to align class 1 and class 2 variables:
+    # The last value of `weight1`/`mean1` should pair with zero values in
+    # `weight2`/`mean2`, which do not exist.
+    variance12 = weight1[:-1] * weight2[1:] * (mean1[:-1] - mean2[1:]) ** 2
+    idx = np.argmax(variance12)
+    #Consider all cells are normal if variance is too small
+    if variance12[idx] < 500000:
+        threshold = 0
+    else:
+        threshold = bin_centers[:-1][idx]
+    return threshold
