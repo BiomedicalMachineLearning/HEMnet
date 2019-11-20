@@ -67,7 +67,18 @@ def read_slide_at_mag(slide, mag):
         return best_level_img.resize(region_size, resample = Image.BICUBIC)  
     
 def tile_gen_at_mag(wsi, mag, tile_size):
-    """Generates tiles from whole slide images at a particular magnification 
+    """Generates tiles from whole slide images
+    
+    Parameters
+    ----------
+    wsi : openslide image
+    mag : int, float
+    tile_size : int, float
+    
+    Yields
+    ------
+    tile_dimensions : tuple
+    tile_image : Pillow image
     """
     #Get size of WSI at Level 0 (Max Magnification)
     x0, y0 = wsi.level_dimensions[0]
