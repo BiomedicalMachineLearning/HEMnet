@@ -1,3 +1,6 @@
+from IPython.display import clear_output
+import matplotlib.pyplot as plt
+import pandas as pd
 from PIL import Image, ImageOps, ImageChops
 import numpy as np
 import SimpleITK as sitk
@@ -70,6 +73,73 @@ def sitk_transform_rgb(moving_rgb_img, fixed_rgb_img, transform, interpolator = 
     rgb_transformed = Image.merge('RGB', transformed_channels)
     return rgb_transformed    
 
+def start_plot():
+    """Setup data for plotting
+    
+    Invoked when StartEvent happens at the beginning of registration.
+    """
+    global metric_values, multires_iterations
+    
+    metric_values = []
+    multires_iterations = []
+
+def end_plot():
+    """Cleanup the data and figures 
+    """
+    global metric_values, multires_iterations
+    
+    del metric_values
+    del multires_iterations
+    # Close figure, we don't want to get a duplicate of the plot latter on.
+    plt.close()
+
+def update_plot(registration_method):
+    """Plot metric value after each registration iteration
+    
+    Invoked when IterationEvent happens.
+    """
+    global metric_values, multires_iterations
+    
+    metric_values.append(registration_method.GetMetricValue())                                       
+    # Clear the output area (wait=True, to reduce flickering), and plot current data
+    clear_output(wait=True)
+    # Plot the similarity metric values
+    plt.plot(metric_values, 'r')
+    plt.plot(multires_iterations, [metric_values[index] for index in multires_iterations], 'b*')
+    plt.xlabel('Iteration Number', fontsize=12)
+    plt.ylabel('Metric', fontsize=12)
+    plt.show()
+    
+def update_multires_iterations():
+    """Update the index in the metric values list that corresponds to a change in registration resolution
+    
+    Invoked when the sitkMultiResolutionIterationEvent happens.
+    """
+    global metric_values, multires_iterations
+    multires_iterations.append(len(metric_values))
+    
+def plot_metric(title = 'Plot of registration metric vs iterations'):
+    """Plots the mutual information over registration iterations
+    
+    Parameters
+    ----------
+    title : str
+    
+    Returns
+    -------
+    fig : matplotlib figure
+    """
+    global metric_values, multires_iterations
+    
+    fig, ax = plt.subplots()
+    ax.set_title(title)
+    ax.set_xlabel('Iteration Number', fontsize=12)
+    ax.set_ylabel('Mutual Information Cost', fontsize=12)
+    ax.plot(metric_values, 'r')
+    ax.plot(multires_iterations, [metric_values[index] for index in multires_iterations], 'b*', label = 'change in resolution')
+    ax.legend()
+    return fig
+
 #################
 # Image Filters #
 #################
@@ -132,6 +202,20 @@ def binary_array_to_pil(array):
             pixels[i,j] = int_list[i][j]
     return ImageOps.mirror(img).rotate(90, expand = True)
 
+def binary2gray(img):
+    """Converts binary arrays to grayscale Pillow image
+    
+    Parameters
+    ----------
+    img : binary ndarray
+    
+    Returns
+    -------
+    out : grayscale Pillow image
+    """
+    img_rescaled = (img*255).astype('uint8')
+    return Image.fromarray(img_rescaled).convert('L')
+
 def tile_gen(img, tile_size):
     '''Generates tiles for Pillow images
     '''
@@ -144,6 +228,50 @@ def tile_gen(img, tile_size):
             x_coord = x*tile_size
             y_coord = y*tile_size
             yield img.crop((x_coord, y_coord, np.int(np.round(x_coord+tile_size)), np.int(np.round(y_coord+tile_size))))
+            
+def max_tiles(img_dim, tile_dim, overlap = 0):
+    """Maximum tiles that can fit across an image dimension
+    
+    Parameters
+    ----------
+    img_dim : int, float
+    tile_dim : int, float
+    overlap : float
+        overlap as a proportion - zero is no overlap, one is complete overlap
+    
+    Returns
+    -------
+    out : int
+    """
+    max_tiles = ((img_dim/tile_dim) - 1)/(1- overlap) + 1
+    return int(np.floor(max_tiles))
+
+def tile_coordinates(img, tile_size, overlap = 0):
+    """Computes a dataframe of tile coordinates for an image
+    
+    Parameters
+    ----------
+    img : Pillow image 
+    tile_size : int, float
+    overlap : float
+        overlap as a proportion - zero is no overlap, one is complete overlap
+    
+    Returns
+    -------
+    out : DataFrame
+    """
+    width, height = img.size
+    x_tiles = max_tiles(width, tile_size, overlap)
+    y_tiles = max_tiles(height, tile_size, overlap)
+    coords = []
+    for y in range(y_tiles):
+        for x in range(x_tiles):
+            x_top_left = x*tile_size*(1-overlap)
+            y_top_left = y*tile_size*(1-overlap)
+            x_bottom_right = x_top_left + tile_size
+            y_bottom_right = y_top_left + tile_size
+            coords.append([x, y, x_top_left, y_top_left, x_bottom_right, y_bottom_right])
+    return pd.DataFrame(coords, columns = ['X','Y','x_top_left', 'y_top_left', 'x_bottom_right', 'y_bottom_right'])
             
 ##################
 # Mask Functions #
@@ -192,3 +320,27 @@ def threshold_otsu_masked(hed_img):
     else:
         threshold = bin_centers[:-1][idx]
     return threshold
+
+def threshold_mask(tile_gen, threshold):
+    """Creates mask from tiles using a threshold
+    
+    Averages the pixel intensities of each tile and applies a threshold. 
+    
+    Parameters
+    ----------
+    tile_gen : tile generator
+    threshold : float
+    
+    Returns
+    -------
+    out : ndarray
+        binary mask where zero is below threshold
+    """
+    mask = []
+    shape = next(tile_gen)
+    for tile in tile_gen:
+        if np.array(tile).mean() < threshold:
+            mask.append(0)
+        else:
+            mask.append(1)
+    return np.reshape(mask, shape)
