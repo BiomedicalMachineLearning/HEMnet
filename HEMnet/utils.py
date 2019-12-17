@@ -1,7 +1,7 @@
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
 import pandas as pd
-from PIL import Image, ImageOps, ImageChops
+from PIL import Image, ImageOps, ImageChops, ImageDraw
 import numpy as np
 import SimpleITK as sitk
 from skimage.exposure import histogram
@@ -190,6 +190,13 @@ def filter_otsu_global(img, mode = 'PIL'):
 # Image Operations #
 ####################
 
+def thumbnail(img, size = (1000,1000)):
+    """Converts Pillow images to a different size without modifying the original image
+    """
+    img_thumbnail = img.copy()
+    img_thumbnail.thumbnail(size)
+    return img_thumbnail
+
 def binary_array_to_pil(array):
     """Converts a binary array to a Pillow Image
     """
@@ -344,3 +351,61 @@ def threshold_mask(tile_gen, threshold):
         else:
             mask.append(1)
     return np.reshape(mask, shape)
+
+def tissue_mask(img_filtered, tile_size, min_tissue = 0.25):
+    """Generates a tissue mask where each tile has a minimum proportion of tissue
+    
+    Parameters
+    ----------
+    img_filtered : Pillow image (RGB)
+        image where background pixels are white - [255, 255, 255]
+    tile_size : int, float
+    min_tissue : float
+        proportion of tissue on a tile needed for the tile to be considered
+        tissue instead of background.
+    
+    Returns
+    -------
+    out : ndarray
+        mask where zero represents tissue and one represents background
+    """
+    mask = []
+    tgen = tile_gen(img_filtered, tile_size)
+    shape = next(tgen)
+    for tile in tgen:
+        total_pixels = tile_size*tile_size
+        blank_pixels = (np.array(tile) == [255, 255, 255]).sum()
+        tissue_proportion = 1 - (blank_pixels/total_pixels)
+        if tissue_proportion > min_tissue:
+            mask.append(0)
+        else:
+            mask.append(1)
+    return np.reshape(mask, shape)
+
+def plot_mask(img, mask, tile_size):
+    """Plots a mask onto an image - zero is red and one is gray
+    
+    Parameters
+    ----------
+    img : Pillow image
+    mask : ndarray
+    tile_size : int, float
+    
+    Returns
+    -------
+    img_overlay : Pillow image
+    """
+    img_overlay = img.copy()
+    d = ImageDraw.Draw(img_overlay)
+    tile_coords = tile_coordinates(img, tile_size)
+    tile_coords['mask'] = mask.ravel()
+    width = int(np.round(tile_size*0.03))
+    for index, row in tile_coords.iterrows():
+        x_top_left, y_top_left = np.round(row['x_top_left':'y_top_left'])
+        x_bottom_right, y_bottom_right = np.ceil(row['x_bottom_right':'y_bottom_right'])
+        if row['mask'] == 0:
+            outline = 'red'
+        else:
+            outline = 'grey'
+        d.rectangle([(x_top_left, y_top_left), (x_bottom_right, y_bottom_right)], outline = outline, width = width)
+    return img_overlay
