@@ -94,5 +94,6 @@ def tile_gen_at_mag(wsi, mag, tile_size):
         for x in range(x_tiles):
             x_coord = round(x*scale*tile_size)
             y_coord = round(y*scale*tile_size)
-            tile = wsi.read_region((x_coord, y_coord), 0, (tile_size, tile_size))
+            scaled_tile_size = round(scale*tile_size)
+            tile = wsi.read_region((x_coord, y_coord), 0, (scaled_tile_size, scaled_tile_size))
             yield tile.resize((tile_size, tile_size), resample = Image.BICUBIC)
