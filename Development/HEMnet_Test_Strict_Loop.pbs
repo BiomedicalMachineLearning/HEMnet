@@ -1,0 +1,14 @@
+#!/bin/bash
+#PBS -N HEMnet_Test_Strict
+#
+#PBS -A UQ-IMB
+#PBS -l select=1:ncpus=12:mpiprocs=18:mem=120GB:vmem=120GB,walltime=10:00:00
+
+module load anaconda/5.2.0
+source activate ~/../../90days/s4436005/envs
+
+cd ~/HEMnet/Development
+python HEMnet_Test_Strict_Loop.py
+
+
+
