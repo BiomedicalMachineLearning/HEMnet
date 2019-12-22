@@ -4,8 +4,10 @@ import pandas as pd
 from PIL import Image, ImageOps, ImageChops, ImageDraw
 import numpy as np
 import SimpleITK as sitk
+from skimage.color import rgb2hed
 from skimage.exposure import histogram
 from skimage.filters import threshold_otsu
+
 
 ######################
 # Image Registration #
@@ -152,7 +154,7 @@ def mutual_information(hgram):
     px = np.sum(pxy, axis = 1) # marginal for x over y
     py = np.sum(pxy, axis = 0) # marginal for y over x
     px_py = px[:, None] * py[None, :] #Broadcat to multiply marginals
-    # Now we can do the calculation using the pxy, px_py 2D arrays 
+    # Now we can do the calculation using the pxy, px_py 2D arrays
     nzs = pxy > 0 # Only non-zero pxy values contribute to the sum
     return np.sum(pxy[nzs] * np.log(pxy[nzs] / px_py[nzs]))
 
@@ -169,7 +171,7 @@ def plot_mutual_info_histogram(histogram):
     plt.imshow(histogram.T, origin = 'lower')
     plt.xlabel('Fixed Image')
     plt.ylabel('Moving Image')
-    
+
 def calculate_mutual_info(fixed_img, moving_img):
     hist = mutual_info_histogram(fixed_img, moving_img)
     return mutual_information(hist)
@@ -415,6 +417,36 @@ def tissue_mask(img_filtered, tile_size, min_tissue = 0.25):
         else:
             mask.append(1)
     return np.reshape(mask, shape)
+
+def cancer_mask(img, tile_size, cancer_thresh = 250):
+    """Generates a cancer mask
+
+    Parameters
+    ----------
+    img : Pillow image (RGB)
+    tile_size : int, float
+    cancer_thresh : int, float
+
+    Returns
+    -------
+    c_mask : ndarray
+        mask where zero represents cancer and one represents background
+    """
+    #Determine Dab threshold with a smaller 1000x1000 image
+    downsample = max(img.size)/1000
+    img_small_size = tuple([np.int(np.round(dim/downsample)) for dim in img.size])
+    img_small = img.resize(img_small_size, resample = Image.BICUBIC)
+    hed_small = rgb2hed(img_small)
+    dab_thresh = threshold_otsu_masked(hed_small)
+    #Extract Dab channel (stain)
+    hed = rgb2hed(img)
+    dab_channel = -hed[:,:,2]
+    dab_binary = dab_channel > dab_thresh
+    #Remove background staining
+    dab_binary_filtered = remove_small_holes(dab_binary, area_threshold = 64)
+    tgen = tile_gen(binary2gray(dab_binary_filtered), tile_size)
+    c_mask = threshold_mask(tgen, cancer_thresh)
+    return c_mask
 
 def plot_mask(img, mask, tile_size):
     """Plots a mask onto an image - zero is red and one is gray
