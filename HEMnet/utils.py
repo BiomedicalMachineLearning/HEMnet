@@ -140,6 +140,40 @@ def plot_metric(title = 'Plot of registration metric vs iterations'):
     ax.legend()
     return fig
 
+################################
+# Mutual Information Functions #
+################################
+
+def mutual_information(hgram):
+    """Mutual information for joint histogram
+    """
+    # Convert bins counts to probability values
+    pxy = hgram / float(np.sum(hgram))
+    px = np.sum(pxy, axis = 1) # marginal for x over y
+    py = np.sum(pxy, axis = 0) # marginal for y over x
+    px_py = px[:, None] * py[None, :] #Broadcat to multiply marginals
+    # Now we can do the calculation using the pxy, px_py 2D arrays 
+    nzs = pxy > 0 # Only non-zero pxy values contribute to the sum
+    return np.sum(pxy[nzs] * np.log(pxy[nzs] / px_py[nzs]))
+
+def mutual_info_histogram(fixed_img, moving_img, bins = 20, log = False):
+    hist_2d, x_edges, y_edges = np.histogram2d(fixed_img.ravel(), moving_img.ravel(), bins = bins)
+    if log:
+        hist_2d_log = np.zeros(hist_2d.shape)
+        non_zeros = hist_2d != 0
+        hist_2d_log[non_zeros] = np.log(hist_2d[non_zeros])
+        return hist_2d_log
+    return hist_2d
+
+def plot_mutual_info_histogram(histogram):
+    plt.imshow(histogram.T, origin = 'lower')
+    plt.xlabel('Fixed Image')
+    plt.ylabel('Moving Image')
+    
+def calculate_mutual_info(fixed_img, moving_img):
+    hist = mutual_info_histogram(fixed_img, moving_img)
+    return mutual_information(hist)
+
 #################
 # Image Filters #
 #################
