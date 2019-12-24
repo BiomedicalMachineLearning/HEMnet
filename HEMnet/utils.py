@@ -475,3 +475,45 @@ def plot_mask(img, mask, tile_size):
             outline = 'grey'
         d.rectangle([(x_top_left, y_top_left), (x_bottom_right, y_bottom_right)], outline = outline, width = width)
     return img_overlay
+
+def plot_masks(img, c_mask, t_mask, tile_size, u_mask = None):
+    """Plots cancer, tissue and uncertain (optional) masks onto an image
+
+    Colours:
+    Cancer - Red
+    Non-cancer - Lime
+    Uncertain - Orange
+
+    Parameters
+    ----------
+    img : Pillow image (RGB)
+    c_mask : ndarray
+    t_mask : ndarray
+    tile_size : int, float
+    u_mask : ndarray (optional)
+
+    Returns
+    -------
+    overlay_img : Pillow image (RGB)
+    """
+    img_overlay = img.copy()
+    d = ImageDraw.Draw(img_overlay)
+    tile_coords = tile_coordinates(img, tile_size)
+    tile_coords['c_mask'] = c_mask.ravel()
+    tile_coords['t_mask'] = t_mask.ravel()
+    if u_mask is not None:
+        tile_coords['u_mask'] = u_mask.ravel()
+    width = int(np.round(tile_size*0.03))
+    for row in tile_coords.itertuples(index = False):
+        x_top_left, y_top_left = np.round(row[2:4])
+        x_bottom_right, y_bottom_right = np.ceil(row[4:6])
+        if row[6] == 0:
+            outline = 'red'
+        elif row[7] == 0:
+            outline = 'lime'
+        else:
+            outline = 'grey'
+        if u_mask is not None and row[8] == 0:
+            outline = 'orange'
+        d.rectangle([(x_top_left, y_top_left), (x_bottom_right, y_bottom_right)], outline = outline, width = width)
+    return img_overlay
