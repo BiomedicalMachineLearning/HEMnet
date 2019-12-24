@@ -7,7 +7,7 @@ import SimpleITK as sitk
 from skimage.color import rgb2hed
 from skimage.exposure import histogram
 from skimage.filters import threshold_otsu
-
+from skimage.morphology import remove_small_holes
 
 ######################
 # Image Registration #
