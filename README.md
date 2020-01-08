@@ -14,10 +14,22 @@ docker pull andrewsu1/hemnet
 docker run -it andrewsu1/hemnet
 ```
 ## Usage
-1. Generate training dataset
-2. Generate test dataset
-3. Train model 
-4. Apply model to diagnose new images
+### Slide Preparation
+Name slides in the format: `slide_id_TP53` for TP53 slides and `slide_id_HandE` for H&E slides
+The `TP53` and `HandE` suffix is used by HEMnet to identify the stain used. 
+### 1. Generate training dataset
+### 2. Generate test dataset
+`python HEMnet_test_dataset.py -b /path/to/base/directory -s /relative/path/to/slides -o /relative/path/to/output/directory
+ -t relative/path/to/template_slide -m tile_mag -a align_mag -c cancer_thresh -n non_cancer_thresh`
+ * `-t` is the relative path to the template slide from which all other slides will be normalised against. 
+ This should be same as the template slide used for generating the train dataset. 
+ * `-m` is the tile magnification. e.g. if  the input is `10` then the tiles will be output at 10x
+ * `-a` is the align magnification. Paired TP53 and H&E slides will be registered at this magnification. 
+ To reduce computation time we recommend this be less than the tile magnification - a five times downscale generally works well.
+ * `-c` cancer threshold to apply to the DAB channel. DAB intensities less than this threshold indicate cancer.
+ * `-n` non-cancer threshold to apply to the DAB channel. DAB intensities greater than this threshold indicate no cancer. 
+### 3. Train model 
+### 4. Apply model to diagnose new images
 
 ## Results
 
@@ -26,5 +38,5 @@ docker run -it andrewsu1/hemnet
 ## The Team
 Please contact Dr Quan Nguyen (quan.nguyen@uq.edu.au), Andrew Su (a.su@uqconnect.edu.au), 
 and Xiao Tan (xiao.tan@uqconnect.edu.au) for issues, suggestions, 
-and we are very welcome collaboration opportunities.
+and we are very welcome to collaboration opportunities.
 
