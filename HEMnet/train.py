@@ -41,6 +41,11 @@ if __name__ == "__main__":
                         help = 'save model weights')
     parser.add_argument('-v', '--verbosity', action = 'store_true',
                         help = 'Increase output verbosity')
+    parser.add_argument('-w', '--transfer_learning', action='store_true',
+                        help='Use CNN base pre-trained from ImageNet')
+    parser.add_argument('-f', '--fine_tuning', action='store_true',
+                        help='Fine-tuning pre-trained model')
+
 
     args = parser.parse_args()
 
@@ -59,7 +64,10 @@ if __name__ == "__main__":
     NUM_GPUS = args.num_gpus
     EPOCHS = args.epochs
     BATCH_SIZE = args.batch_size
+    TRANSFER_LEARNING = args.transfer_learning
+    FINE_TUNING = args.fine_tuning
     VERBOSE = args.verbosity
+
 
     # Verbose functions
     if VERBOSE:
@@ -81,7 +89,7 @@ if __name__ == "__main__":
                                        width_shift_range=0.2,
                                        height_shift_range=0.2,
                                        shear_range=0.2,
-                                       zoom_range=0.2, )
+                                       zoom_range=0.2)
     train_generator = train_datagen.flow_from_directory(TRAIN_INPUT_PATH,
                                                         classes=['cancer', 'non-cancer'],
                                                         target_size=input_size,
@@ -102,9 +110,7 @@ if __name__ == "__main__":
     os.makedirs(OUTPUT_PATH, exist_ok=True)
     HEMnet.save_training_results(OUTPUT_PATH)
     if SAVE_MODEL:
-        model_save_path = OUTPUT_PATH .joinpath("trained_model_" +
-                                                time.strftime("%d_%b_%Y", time.localtime()) +
-                                                ".h5")
+        model_save_path = OUTPUT_PATH.joinpath("trained_model.h5")
         HEMnet.save_model(model_save_path)
 
 
