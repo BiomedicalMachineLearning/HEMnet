@@ -2,7 +2,39 @@
 # Tools for stain normalisation
 # ------------------------------------------------------------------------
 
-from staintools import ReinhardColorNormalizer
+import numpy as np
+import cv2 as cv
+from staintools.preprocessing.input_validation import is_uint8_image
+from staintools import ReinhardColorNormalizer, LuminosityStandardizer, StainNormalizer 
+from staintools.stain_extraction.macenko_stain_extractor import MacenkoStainExtractor
+from staintools.stain_extraction.vahadane_stain_extractor import VahadaneStainExtractor
+from staintools.miscellaneous.optical_density_conversion import convert_OD_to_RGB
+from staintools.miscellaneous.get_concentrations import get_concentrations
+
+class LuminosityStandardizerIterative(LuminosityStandardizer):
+    """
+    Transforms image to a standard brightness
+    Modifies the luminosity channel such that a fixed percentile is saturated
+    
+    Standardiser can fit to source slide image and apply the same luminosity standardisation settings to all tiles generated
+    from the source slide image
+    """
+    def __init__(self):
+        super().__init__()
+        self.p = None
+        
+    def fit(self, I, percentile = 95):
+        assert is_uint8_image(I), "Image should be RGB uint8."
+        I_LAB = cv.cvtColor(I, cv.COLOR_RGB2LAB)
+        L_float = I_LAB[:, :, 0].astype(float)
+        self.p = np.percentile(L_float, percentile)
+        
+    def standardize_tile(self, I):
+        I_LAB = cv.cvtColor(I, cv.COLOR_RGB2LAB)
+        L_float = I_LAB[:, :, 0].astype(float)
+        I_LAB[:, :, 0] = np.clip(255 * L_float / self.p, 0, 255).astype(np.uint8)
+        I = cv.cvtColor(I_LAB, cv.COLOR_LAB2RGB)
+        return I
 
 class ReinhardColorNormalizerIterative(ReinhardColorNormalizer):
     """
@@ -91,3 +123,22 @@ class ReinhardColorNormalizerIterative(ReinhardColorNormalizer):
         norm2 = ((I2 - self.source_means[1]) * (self.target_stds[1] / self.source_stds[1])) + self.target_means[1]
         norm3 = ((I3 - self.source_means[2]) * (self.target_stds[2] / self.source_stds[2])) + self.target_means[2]
         return self.merge_back(norm1, norm2, norm3)
+
+class StainNormalizerIterative(StainNormalizer):
+    """Normalise each tile from a slide to a target slide using the Macenko or Vahadane method
+    """
+    def __init__(self):
+        super().__init__()
+        self.maxC_source = None
+        
+    def fit_source(self, I):
+        self.stain_matrix_source = self.extractor.get_stain_matrix(I)
+        source_concentrations = get_concentrations(I, self.stain_matrix_source)
+        self.maxC_source = np.percentile(source_concentrations, 99, axis=0).reshape((1, 2))
+        
+    def transform_tile(self, I):
+        source_concentrations = get_concentrations(I, self.stain_matrix_source)
+        source_concentrations *= (self.maxC_target / self.maxC_source)
+        tmp = 255 * np.exp(-1 * np.dot(source_concentrations, self.stain_matrix_target))
+        return tmp.reshape(I.shape).astype(np.uint8)
+
