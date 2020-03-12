@@ -127,9 +127,12 @@ class ReinhardColorNormalizerIterative(ReinhardColorNormalizer):
 class StainNormalizerIterative(StainNormalizer):
     """Normalise each tile from a slide to a target slide using the Macenko or Vahadane method
     """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, method):
+        super().__init__(method)
         self.maxC_source = None
+        
+    def fit_target(self, I):    
+        self.fit(I)
         
     def fit_source(self, I):
         self.stain_matrix_source = self.extractor.get_stain_matrix(I)
