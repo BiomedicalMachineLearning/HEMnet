@@ -4,8 +4,9 @@
 
 import numpy as np
 import cv2 as cv
+from PIL import Image
 from staintools.preprocessing.input_validation import is_uint8_image
-from staintools import ReinhardColorNormalizer, LuminosityStandardizer, StainNormalizer 
+from staintools import ReinhardColorNormalizer, LuminosityStandardizer, StainNormalizer
 from staintools.stain_extraction.macenko_stain_extractor import MacenkoStainExtractor
 from staintools.stain_extraction.vahadane_stain_extractor import VahadaneStainExtractor
 from staintools.miscellaneous.optical_density_conversion import convert_OD_to_RGB
@@ -22,13 +23,13 @@ class LuminosityStandardizerIterative(LuminosityStandardizer):
     def __init__(self):
         super().__init__()
         self.p = None
-        
+
     def fit(self, I, percentile = 95):
         assert is_uint8_image(I), "Image should be RGB uint8."
         I_LAB = cv.cvtColor(I, cv.COLOR_RGB2LAB)
         L_float = I_LAB[:, :, 0].astype(float)
         self.p = np.percentile(L_float, percentile)
-        
+
     def standardize_tile(self, I):
         I_LAB = cv.cvtColor(I, cv.COLOR_RGB2LAB)
         L_float = I_LAB[:, :, 0].astype(float)
@@ -130,18 +131,64 @@ class StainNormalizerIterative(StainNormalizer):
     def __init__(self, method):
         super().__init__(method)
         self.maxC_source = None
-        
-    def fit_target(self, I):    
+
+    def fit_target(self, I):
         self.fit(I)
-        
+
     def fit_source(self, I):
         self.stain_matrix_source = self.extractor.get_stain_matrix(I)
         source_concentrations = get_concentrations(I, self.stain_matrix_source)
         self.maxC_source = np.percentile(source_concentrations, 99, axis=0).reshape((1, 2))
-        
+
     def transform_tile(self, I):
         source_concentrations = get_concentrations(I, self.stain_matrix_source)
         source_concentrations *= (self.maxC_target / self.maxC_source)
         tmp = 255 * np.exp(-1 * np.dot(source_concentrations, self.stain_matrix_target))
         return tmp.reshape(I.shape).astype(np.uint8)
+
+class IterativeNormaliser:
+    """Iterative normalise each tile from a slide to a target using a selectable method
+    Normalisation methods include: 'none', 'reinhard', 'macenko' and 'vahadane'
+    Luminosity standardisation is also selectable
+    """
+    def __init__(self, normalisation_method = 'vahadane', standardise_luminosity = True):
+        self.method = normalisation_method
+        self.standardise_luminosity = standardise_luminosity
+        # Instantiate normaliser and luminosity standardiser
+        if normalisation_method == 'none':
+            pass
+        elif normalisation_method == 'reinhard':
+            self.normaliser = ReinhardColorNormalizerIterative()
+        elif normalisation_method == 'macenko' or normalisation_method == 'vahadane':
+            self.normaliser = StainNormalizerIterative(normalisation_method)
+        if standardise_luminosity:
+            self.lum_std = LuminosityStandardizerIterative()
+
+    def fit_target(selfs, target_img):
+        if self.standardise_luminosity:
+            target_std = self.lum_std.standardize(np.array(target_img))
+        else:
+            target_std = np.array(target_img)
+        if self.method != 'none':
+            self.normaliser.fit_target(template_std)
+
+    def fit_source(self, source_img):
+        if self.standardise_luminosity:
+            self.lum_std.fit(np.array(source_img))
+            source_std = self.lum_std.standardize_tile(np.array(source_img))
+        else:
+            source_std = np.array(source_img)
+        if self.method != 'none':
+            normaliser.fit_source(source_std)
+
+    def transform_tile(self, tile_img):
+        if self.standardise_luminosity:
+            tile_std = self.lum_std.standardize_tile(np.array(tile_img))
+        else:
+            tile_std = np.array(tile_img)
+        if self.method != 'none':
+            tile_norm = self.normaliser.transform_tile(tile_std)
+        else:
+            tile_norm = tile_std
+        return Image.fromarray(tile_norm)
 
