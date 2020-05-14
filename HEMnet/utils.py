@@ -315,6 +315,55 @@ def tile_coordinates(img, tile_size, overlap = 0):
             y_bottom_right = y_top_left + tile_size
             coords.append([x, y, x_top_left, y_top_left, x_bottom_right, y_bottom_right])
     return pd.DataFrame(coords, columns = ['X','Y','x_top_left', 'y_top_left', 'x_bottom_right', 'y_bottom_right'])
+
+
+class PlotImageAlignment:
+    """Plot the alignment between two identically sized images
+    """
+
+    def __init__(self, style='vertical', pixel_spacing=300):
+        self.px_spacing = pixel_spacing
+        self.style = style
+
+    def plot_images(self, img1, img2):
+        mask = self.generate_mask(img1.size)
+        overlay = img1.copy()
+        overlay.paste(img2, (0, 0), mask)
+        return overlay
+
+    def generate_mask(self, img_size):
+        blank_mask = Image.new('L', img_size, 0)
+        if self.style == 'horizontal':
+            return self.draw_horizontal_mask(blank_mask)
+        elif self.style == 'vertical':
+            return self.draw_vertical_mask(blank_mask)
+        else:
+            # Draw Tile Mask
+            horizontal_mask = self.draw_horizontal_mask(blank_mask.copy())
+            vertical_mask = self.draw_vertical_mask(blank_mask.copy())
+            return ImageChops.difference(horizontal_mask, vertical_mask)
+
+    def draw_horizontal_mask(self, mask):
+        draw = ImageDraw.Draw(mask)
+        img_width, img_height = mask.size
+        x_top_left, y_top_left = 0, 0
+        x_bottom_right, y_bottom_right = img_width, slice_width
+        while y_top_left < img_height:
+            draw.rectangle((x_top_left, y_top_left, x_bottom_right, y_bottom_right), fill=255)
+            y_top_left += slice_width * 2
+            y_bottom_right += slice_width * 2
+        return mask
+
+    def draw_vertical_mask(self, mask):
+        draw = ImageDraw.Draw(mask)
+        img_width, img_height = mask.size
+        x_top_left, y_top_left = 0, 0
+        x_bottom_right, y_bottom_right = slice_width, img_height
+        while x_top_left < img_width:
+            draw.rectangle((x_top_left, y_top_left, x_bottom_right, y_bottom_right), fill=255)
+            x_top_left += slice_width * 2
+            x_bottom_right += slice_width * 2
+        return mask
             
 ##################
 # Mask Functions #
