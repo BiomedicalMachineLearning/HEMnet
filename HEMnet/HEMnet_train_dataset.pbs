@@ -1,0 +1,12 @@
+#!/bin/bash
+#PBS -N HEMnet_Train_Dataset
+#
+#PBS -A UQ-IMB
+#PBS -l select=1:ncpus=10:mpiprocs=10:mem=80GB:vmem=80GB,walltime=3:00:00
+
+# Load conda environment
+module load anaconda/5.2.0
+source activate ~/../../90days/s4436005/envs
+
+cd ~/HEMnet/HEMnet
+python HEMnet_train_dataset.py -b '/gpfs1/scratch/90days/s4436005' -s 'Slides/Training' -o 'img_reg/train_dataset_10x_27_05_20_strict_reinhard' -t 'Slides/1957_T_9668_3_HandE.svs' -n 'reinhard' -std -v
