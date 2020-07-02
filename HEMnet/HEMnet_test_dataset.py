@@ -35,7 +35,7 @@ sys.path.append(str(HEMNET_DIR))
 
 from slide import *
 from utils import *
-from normaliser import ReinhardColorNormalizerIterative
+from normaliser import IterativeNormaliser
 
 #############
 # Functions #
@@ -149,28 +149,36 @@ def save_test_tiles(path, tile_gen, cancer_mask, tissue_mask, uncertain_mask, pr
     -------
     None
     """
-    os.makedirs(TILES_PATH.joinpath('cancer'), exist_ok = True)
-    os.makedirs(TILES_PATH.joinpath('non-cancer'), exist_ok = True)
-    os.makedirs(TILES_PATH.joinpath('uncertain'), exist_ok = True)
+    os.makedirs(TILES_PATH.joinpath('cancer'), exist_ok=True)
+    os.makedirs(TILES_PATH.joinpath('non-cancer'), exist_ok=True)
+    os.makedirs(TILES_PATH.joinpath('uncertain'), exist_ok=True)
+    os.makedirs(TILES_PATH.joinpath('other'), exist_ok=True)
     x_tiles, y_tiles = next(tile_gen)
     verbose_print('Whole Image Size is {0} x {1}'.format(x_tiles, y_tiles))
     i = 0
+    tile_counts = {'cancer': 0, 'non-cancer': 0, 'uncertain': 0, 'other': 0}
     for tile in tile_gen:
         img = tile.convert('RGB')
         ###
-        img_np = np.array(img)
-        img_norm = Image.fromarray(normaliser.transform_tile(img_np))
+        img_norm = normaliser.transform_tile(img)
         ###
-        #Name tile as horizontal position _ vertical position starting at (0,0)
-        tile_name = prefix + str(np.floor_divide(i,x_tiles)) + '_' +  str(i%x_tiles)
+        # Name tile as horizontal position _ vertical position starting at (0,0)
+        tile_name = prefix + str(np.floor_divide(i, x_tiles)) + '_' + str(i % x_tiles)
         if uncertain_mask.ravel()[i] == 0:
             img_norm.save(path.joinpath('uncertain', tile_name + '.jpeg'), 'JPEG')
+            tile_counts['uncertain'] += 1
         elif cancer_mask.ravel()[i] == 0:
             img_norm.save(path.joinpath('cancer', tile_name + '.jpeg'), 'JPEG')
+            tile_counts['cancer'] += 1
         elif tissue_mask.ravel()[i] == 0:
             img_norm.save(path.joinpath('non-cancer', tile_name + '.jpeg'), 'JPEG')
+            tile_counts['non-cancer'] += 1
+        else:
+            img_norm.save(path.joinpath('other', tile_name + '.jpeg'), 'JPEG')
+            tile_counts['other'] += 1
         i += 1
     verbose_print('Exported tiles for {0}'.format(prefix))
+    return tile_counts
 
 if __name__ == "__main__":
 
@@ -187,12 +195,16 @@ if __name__ == "__main__":
                         help = 'Magnification for generating tiles')
     parser.add_argument('-a', '--align_mag', type = float, default = 2,
                         help = 'Magnification for aligning H&E and TP53 slide' )
+    parser.add_argument('-n', '--normaliser', type=str, default='vahadane',
+                        choices=['none', 'reinhard', 'macenko', 'vahadane'], help='H&E normalisation method')
+    parser.add_argument('-std', '--standardise_luminosity', action='store_false',
+                        help='Disable luminosity standardisation')
     parser.add_argument('-c', '--cancer_thresh', type = restricted_float, default = 0.39,
                         help = 'TP53 threshold for cancer classification')
     parser.add_argument('-n', '--non_cancer_thresh', type = restricted_float, default = 0.40,
                         help = 'TP53 threshold for non-cancer classification')
-    parser.add_argument('-f', '--fix_orientation', action = 'store_true',
-                        help = 'Automatically fix the slide orientation')
+    parser.add_argument('-f', '--fix_orientation', type = Path, default = None,
+                        help = 'Path for orientation correction file to fix TP53 slide orientation')
     parser.add_argument('-v', '--verbosity', action = 'store_true',
                         help = 'Increase output verbosity')
 
@@ -206,14 +218,16 @@ if __name__ == "__main__":
     SLIDES_PATH = BASE_PATH.joinpath(args.slides_dir)
     OUTPUT_PATH = BASE_PATH.joinpath(args.out_dir)
     TEMPLATE_SLIDE_PATH = BASE_PATH.joinpath(args.template_path)
+    ORIENTATION_CORRECTIONS_PATH = BASE_PATH.joinpath(args.fix_orientation)
 
     #User selectable parameters
     ALIGNMENT_MAG = args.align_mag
     TILE_MAG = args.tile_mag
     CANCER_THRESH = args.cancer_thresh
     NON_CANCER_THRESH = args.non_cancer_thresh
-    FIX_ORIENTATION = args.fix_orientation
     VERBOSE = args.verbosity
+    NORMALISER_METHOD = args.normaliser
+    STANDARDISE_LUMINOSITY = args.standardise_luminosity
 
     # Verbose functions
     if VERBOSE:
@@ -242,9 +256,16 @@ if __name__ == "__main__":
 
     # Load and fit template slide
     template_slide = open_slide(str(TEMPLATE_SLIDE_PATH))
-    template = read_slide_at_mag(template_slide, ALIGNMENT_MAG)
-    normaliser = ReinhardColorNormalizerIterative()
-    normaliser.fit_target(np.array(template))
+    template_img = read_slide_at_mag(template_slide, ALIGNMENT_MAG).convert('RGB')
+
+    normaliser = IterativeNormaliser(NORMALISER_METHOD, STANDARDISE_LUMINOSITY)
+    normaliser.fit_target(template_img)
+
+    # Create an empty dataframe to store how many tiles are exported
+    tile_counts_df = pd.DataFrame([])
+
+    if ORIENTATION_CORRECTIONS_PATH:
+        orientation_corrections = pd.read_csv(ORIENTATION_CORRECTIONS_PATH, index_col = 0, header = None)
 
     #Process each pair of slides
     for num in range(len(Paired_slides)):
@@ -261,9 +282,12 @@ if __name__ == "__main__":
         tp53 = read_slide_at_mag(tp53_slide, ALIGNMENT_MAG)
 
         # Normalise H&E Slide
-        normaliser.fit_source(np.array(he))
-        he_transformed = normaliser.transform_tile(np.array(he))
-        he_norm_small = Image.fromarray(he_transformed)
+        # Normalise H&E Slide
+        normaliser.fit_source(he)
+        he_norm = normaliser.transform_tile(he)
+
+        verbose_save_img(he_norm.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + str(ALIGNMENT_MAG) + 'x_normalised.jpeg'), 'JPEG')
 
         ######################
         # Image Registration #
@@ -286,14 +310,33 @@ if __name__ == "__main__":
         initial_transform = sitk.CenteredTransformInitializer(fixed_img, moving_img, sitk.Euler2DTransform(),
                                                               sitk.CenteredTransformInitializerFilter.GEOMETRY)
         moving_rgb = sitk_transform_rgb(tp53, he_norm_small, initial_transform)
-        comparison_pre = show_alignment(he_norm_small, moving_rgb, prefilter=True)
-        verbose_save_img(comparison_pre.convert('RGB'),
-                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_pre_registration.jpeg'), 'JPEG')
 
-        if FIX_ORIENTATION:
-            angle = optimal_angle(tp53, he_norm_small)
-            # Convert to grayscale
+        # Visualise and save alignment
+        align_plotter = PlotImageAlignment('vertical', 300)
+        comparison_pre_v_stripes = align_plotter.plot_images(he, moving_rgb)
+        verbose_save_img(comparison_pre_v_stripes.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_pre_align_v_stripes.jpeg'), 'JPEG')
+
+        align_plotter = PlotImageAlignment('horizontal', 300)
+        comparison_pre_h_stripes = align_plotter.plot_images(he, moving_rgb)
+        verbose_save_img(comparison_pre_h_stripes.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_pre_align_h_stripes.jpeg'), 'JPEG')
+
+        align_plotter = PlotImageAlignment('mosaic', 300)
+        comparison_pre_mosaic = align_plotter.plot_images(he, moving_rgb)
+        verbose_save_img(comparison_pre_mosaic.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_pre_align_mosaic.jpeg'), 'JPEG')
+
+        comparison_pre_colour_overlay = show_alignment(he_norm, moving_rgb, prefilter=True)
+        verbose_save_img(comparison_pre_colour_overlay.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_pre_align_colour_overlay.jpeg'), 'JPEG')
+
+        if ORIENTATION_CORRECTIONS_PATH:
+            # Correct orientation of TP53 slide
+            angle = orientation_corrections.loc[tp53_name].values[0]
             tp53 = tp53.rotate(angle)
+            verbose_print('Rotated TP53 slide {0} degrees to correct orientation'.format(angle))
+            # Convert to grayscale
             tp53_gray = tp53.convert('L')
             he_gray = he_norm_small.convert('L')
             # Convert to ITK format
@@ -402,20 +445,35 @@ if __name__ == "__main__":
         verbose_print('B-spline mutual information metric: {0}'.format(bspline_mutual_info))
 
         # Transform the original TP53 into the aligned TP53 image
-        moving_rgb_affine = sitk_transform_rgb(tp53, he_norm_small, affine_transform, INTERPOLATOR)
-        tp53_aligned = sitk_transform_rgb(moving_rgb_affine, he_norm_small, bspline_transform, INTERPOLATOR)
-        thumbnail(show_alignment(he_norm_small, tp53_aligned, prefilter=True))
+        moving_rgb_affine = sitk_transform_rgb(tp53, he_norm, affine_transform, INTERPOLATOR)
+        tp53_aligned = sitk_transform_rgb(moving_rgb_affine, he_norm, bspline_transform, INTERPOLATOR)
+
+        # Visualise and save alignment
+        align_plotter = PlotImageAlignment('vertical', 300)
+        comparison_post_v_stripes = align_plotter.plot_images(he, tp53_aligned)
+        verbose_save_img(comparison_post_v_stripes.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_post_align_v_stripes.jpeg'), 'JPEG')
+
+        align_plotter = PlotImageAlignment('horizontal', 300)
+        comparison_post_h_stripes = align_plotter.plot_images(he, tp53_aligned)
+        verbose_save_img(comparison_post_h_stripes.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_post_align_h_stripes.jpeg'), 'JPEG')
+
+        align_plotter = PlotImageAlignment('mosaic', 300)
+        comparison_post_mosaic = align_plotter.plot_images(he, tp53_aligned)
+        verbose_save_img(comparison_post_mosaic.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_post_align_mosaic.jpeg'), 'JPEG')
 
         # Remove backgrounds from TP53 and H&E images
         tp53_filtered = filter_green(tp53_aligned)
-        he_filtered = filter_green(he_norm_small)
+        he_filtered = filter_green(he_norm)
         tp53_filtered = filter_grays(tp53_filtered, tolerance=2)
         he_filtered = filter_grays(he_filtered, tolerance=15)
 
         # Visually compare alignment between the registered TP53 and original H&E image
-        comparison_post = show_alignment(he_filtered, tp53_filtered)
-        verbose_save_img(comparison_post.convert('RGB'),
-                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_post_registration.jpeg'), 'JPEG')
+        comparison_post_colour_overlay = show_alignment(he_filtered, tp53_filtered)
+        verbose_save_img(comparison_post_colour_overlay.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + 'comparison_post_align_colour_overlay.jpeg'), 'JPEG')
 
         ####################################
         # Generate cancer and tissue masks #
@@ -449,10 +507,10 @@ if __name__ == "__main__":
         c_mask_filtered = np.logical_not(np.logical_not(c_mask) & np.logical_not(t_mask_filtered))
 
         #Overlay masks onto TP53 and H&E Image
-        overlay_tp53 = plot_masks(tp53_filtered, c_mask_filtered, t_mask_filtered, tile_size, u_mask_filtered)
+        overlay_tp53 = plot_masks(tp53_filtered, c_mask_filtered, t_mask_filtered, tile_size, u_mask_filtered, width_proportion = 0.07)
         verbose_save_img(overlay_tp53.convert('RGB'), OUTPUT_PATH.joinpath(PREFIX + 'TP53_overlay.jpeg'), 'JPEG')
 
-        overlay_he = plot_masks(he_filtered, c_mask_filtered, t_mask_filtered, tile_size, u_mask_filtered)
+        overlay_he = plot_masks(he_filtered, c_mask_filtered, t_mask_filtered, tile_size, u_mask_filtered, width_proportion = 0.07)
         verbose_save_img(overlay_he.convert('RGB'), OUTPUT_PATH.joinpath(PREFIX + 'HE_overlay.jpeg'), 'JPEG')
 
         ##############
@@ -465,21 +523,11 @@ if __name__ == "__main__":
 
         # Save tiles
         tgen = tile_gen_at_mag(he_slide, TILE_MAG, 299)
-        save_test_tiles(TILES_PATH, tgen, c_mask_filtered, t_mask_filtered, u_mask_filtered, prefix=PREFIX)
+        tile_counts = save_test_tiles(TILES_PATH, tgen, c_mask_filtered, t_mask_filtered, u_mask_filtered, prefix=PREFIX)
 
-        # Calculate Metrics
-        tissue_tiles = np.invert(t_mask_filtered.astype(np.bool)).sum()
-        uncertain_tiles = np.invert(u_mask_filtered).sum()
-        cancer_tiles = np.invert(c_mask_filtered).sum()
+        tile_counts['slide_name'] = he_name
+        tile_counts_df = tile_counts_df.append(tile_counts, ignore_index=True)
+        tile_counts_df.to_csv(OUTPUT_PATH.joinpath('slide_tile_counts.csv'))
 
-        uncertain_percentage = uncertain_tiles / tissue_tiles
-        cancer_percentage = cancer_tiles / tissue_tiles
 
-        tile_metrics = pd.DataFrame(
-            np.array([[tissue_tiles, uncertain_tiles, cancer_tiles, uncertain_percentage, cancer_percentage]]),
-            index=[PREFIX],
-            columns=['tissue_tiles', 'uncertain_tiles', 'cancer_tiles', 'uncertain_percentage', 'cancer_percentage'])
 
-        # Print and save metrics for slide
-        verbose_print(tile_metrics)
-        tile_metrics.to_csv(OUTPUT_PATH.joinpath(PREFIX + 'metrics.csv'))
