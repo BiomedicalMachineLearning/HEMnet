@@ -201,7 +201,7 @@ if __name__ == "__main__":
                         help='Disable luminosity standardisation')
     parser.add_argument('-c', '--cancer_thresh', type = restricted_float, default = 0.39,
                         help = 'TP53 threshold for cancer classification')
-    parser.add_argument('-n', '--non_cancer_thresh', type = restricted_float, default = 0.40,
+    parser.add_argument('-nc', '--non_cancer_thresh', type = restricted_float, default = 0.40,
                         help = 'TP53 threshold for non-cancer classification')
     parser.add_argument('-f', '--fix_orientation', type = Path, default = None,
                         help = 'Path for orientation correction file to fix TP53 slide orientation')
@@ -297,7 +297,7 @@ if __name__ == "__main__":
 
         # Convert to grayscale
         tp53_gray = tp53.convert('L')
-        he_gray = he_norm_small.convert('L')
+        he_gray = he_norm.convert('L')
         # Convert to ITK format
         tp53_itk = get_itk_from_pil(tp53_gray)
         he_itk = get_itk_from_pil(he_gray)
@@ -309,7 +309,7 @@ if __name__ == "__main__":
         # Centre the two images, then compare their alignment
         initial_transform = sitk.CenteredTransformInitializer(fixed_img, moving_img, sitk.Euler2DTransform(),
                                                               sitk.CenteredTransformInitializerFilter.GEOMETRY)
-        moving_rgb = sitk_transform_rgb(tp53, he_norm_small, initial_transform)
+        moving_rgb = sitk_transform_rgb(tp53, he_norm, initial_transform)
 
         # Visualise and save alignment
         align_plotter = PlotImageAlignment('vertical', 300)
@@ -338,7 +338,7 @@ if __name__ == "__main__":
             verbose_print('Rotated TP53 slide {0} degrees to correct orientation'.format(angle))
             # Convert to grayscale
             tp53_gray = tp53.convert('L')
-            he_gray = he_norm_small.convert('L')
+            he_gray = he_norm.convert('L')
             # Convert to ITK format
             tp53_itk = get_itk_from_pil(tp53_gray)
             he_itk = get_itk_from_pil(he_gray)
