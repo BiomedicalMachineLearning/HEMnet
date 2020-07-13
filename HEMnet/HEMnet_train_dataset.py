@@ -8,7 +8,8 @@
 #     e.g. patient123_N_HandE.svs
 #
 # Example command:
-# python HEMnet_train_dataset.py -b '/gpfs1/scratch/90days/s4436005' -o 'img_reg/20_05_20_testing' -t 'Slides/1957_T_9668_3_HandE.svs' -v
+# python HEMnet_train_dataset.py -b '/gpfs1/scratch/90days/s4436005' -s 'Slides/Training' -o 'img_reg/27_05_20_testing' -t 'Slides/1957_T_9668_3_HandE.svs' -v
+# python HEMnet_train_dataset.py -b '/gpfs1/scratch/90days/s4436005' -s 'Slides/Training' -o 'img_reg/train_dataset_10x_27_05_20_strict_vahadane2' -t 'Slides/1957_T_9668_3_HandE.svs' -v
 # ------------------------------------------------------------------------
 
 import argparse
@@ -117,12 +118,15 @@ def save_train_tiles(path, tile_gen, cancer_mask, tissue_mask, uncertain_mask, p
     -------
     None
     """
-    os.makedirs(TILES_PATH.joinpath('cancer'), exist_ok = True)
-    os.makedirs(TILES_PATH.joinpath('non-cancer'), exist_ok = True)
-    os.makedirs(TILES_PATH.joinpath('uncertain'), exist_ok = True)
+    os.makedirs(path.joinpath('cancer'), exist_ok = True)
+    os.makedirs(path.joinpath('non-cancer'), exist_ok = True)
+    os.makedirs(path.joinpath('uncertain'), exist_ok = True)
     x_tiles, y_tiles = next(tile_gen)
     verbose_print('Whole Image Size is {0} x {1}'.format(x_tiles, y_tiles))
     i = 0
+    cancer = 0
+    uncertain = 0
+    non_cancer = 0
     for tile in tile_gen:
         img = tile.convert('RGB')
         ###
@@ -132,11 +136,15 @@ def save_train_tiles(path, tile_gen, cancer_mask, tissue_mask, uncertain_mask, p
         tile_name = prefix + str(np.floor_divide(i,x_tiles)) + '_' +  str(i%x_tiles)
         if uncertain_mask.ravel()[i] == 0:
             img_norm.save(path.joinpath('uncertain', tile_name + '.jpeg'), 'JPEG')
+            uncertain += 1
         elif cancer_mask.ravel()[i] == 0:
             img_norm.save(path.joinpath('cancer', tile_name + '.jpeg'), 'JPEG')
+            cancer += 1
         elif tissue_mask.ravel()[i] == 0:
             img_norm.save(path.joinpath('non-cancer', tile_name + '.jpeg'), 'JPEG')
+            non_cancer += 1
         i += 1
+    verbose_print('Cancer tiles: {0}, Non Cancer tiles: {1}, Uncertain tiles: {2}'.format(cancer, non_cancer, uncertain))
     verbose_print('Exported tiles for {0}'.format(prefix))
 
 if __name__ == "__main__":
@@ -152,8 +160,12 @@ if __name__ == "__main__":
                         help = 'Path to normalisation template slide - relative to base directory')
     parser.add_argument('-m', '--tile_mag', type = float, default = 10,
                         help = 'Magnification for generating tiles')
+    parser.add_argument('-ts', '--tile_size', type = int, default = 224,
+                        help = 'Output tile size in pixels')
     parser.add_argument('-n', '--normaliser', type = str, default = 'vahadane',
                         choices=['none','reinhard','macenko','vahadane'], help = 'H&E normalisation method')
+    parser.add_argument('-std', '--standardise_luminosity', action='store_false',
+                        help = 'Disable luminosity standardisation')
     parser.add_argument('-a', '--align_mag', type = float, default = 2,
                         help = 'Magnification for aligning H&E and TP53 slide' )
     parser.add_argument('-c', '--cancer_thresh', type = restricted_float, default = 0.39,
@@ -184,7 +196,8 @@ if __name__ == "__main__":
     # FIX_ORIENTATION = args.fix_orientation
     VERBOSE = args.verbosity
     NORMALISER_METHOD = args.normaliser
-    STANDARDISE_LUMINOSITY = True
+    STANDARDISE_LUMINOSITY = args.standardise_luminosity
+    OUTPUT_TILE_SIZE = args.tile_size
 
     # Verbose functions
     if VERBOSE:
@@ -222,8 +235,8 @@ if __name__ == "__main__":
     normaliser.fit_target(template_img)
 
     # Process each pair of slides
-    # for num in range(len(Paired_slides)):
-    for num in [0]:
+    for num in range(len(Paired_slides)):
+    #for num in [8]:
         SLIDE_NUM = num
         PREFIX = Paired_slides[SLIDE_NUM][0][:-8]
         print('-' * (18 + len(PREFIX)))
@@ -291,6 +304,7 @@ if __name__ == "__main__":
         initial_mutual_info = calculate_mutual_info(np.array(he_gray),
                                                     np.array(get_pil_from_itk(moving_resampled_initial)))
         verbose_print('Initial mutual information metric: {0}'.format(initial_mutual_info))
+        performance_df.loc[SLIDE_NUM, "Initial_Mutual_Info"] = initial_mutual_info
 
         # --- Affine Registration --- #
 
@@ -341,6 +355,7 @@ if __name__ == "__main__":
         affine_mutual_info = calculate_mutual_info(np.array(he_gray),
                                                    np.array(get_pil_from_itk(moving_resampled_affine)))
         verbose_print('Affine mutual information metric: {0}'.format(affine_mutual_info))
+        performance_df.loc[SLIDE_NUM, "Affine_Mutual_Info"] = affine_mutual_info
 
         # --- B-spline registration --- #
 
@@ -390,6 +405,7 @@ if __name__ == "__main__":
         bspline_mutual_info = calculate_mutual_info(np.array(he_gray),
                                                     np.array(get_pil_from_itk(moving_resampled_final)))
         verbose_print('B-spline mutual information metric: {0}'.format(bspline_mutual_info))
+        performance_df.loc[SLIDE_NUM, "Final_Mutual_Info"] = bspline_mutual_info
 
         # Transform the original TP53 into the aligned TP53 image
         moving_rgb_affine = sitk_transform_rgb(tp53, he_norm, affine_transform, INTERPOLATOR)
@@ -422,15 +438,20 @@ if __name__ == "__main__":
         verbose_save_img(comparison_post_colour_overlay.convert('RGB'),
                          OUTPUT_PATH.joinpath(PREFIX + 'comparison_post_align_colour_overlay.jpeg'), 'JPEG')
 
+        verbose_save_img(tp53_aligned.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + str(ALIGNMENT_MAG) + 'x_TP53_aligned.jpeg'), 'JPEG')
+        verbose_save_img(tp53_filtered.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + str(ALIGNMENT_MAG) + 'x_TP53_aligned_white.jpeg'), 'JPEG')
+
         ####################################
         # Generate cancer and tissue masks #
         ####################################
 
         # Scale tile size for alignment mag
-        tile_size = 299 * ALIGNMENT_MAG / TILE_MAG
+        tile_size = OUTPUT_TILE_SIZE * ALIGNMENT_MAG / TILE_MAG
 
         # Generate cancer mask and tissue mask from filtered tp53 image
-        c_mask = cancer_mask(tp53_filtered, tile_size, 250)
+        c_mask = cancer_mask(tp53_filtered, tile_size, 250).astype(np.bool)
         t_mask_tp53 = tissue_mask(tp53_filtered, tile_size)
         t_mask_he = tissue_mask(he_filtered, tile_size)
 
@@ -464,6 +485,7 @@ if __name__ == "__main__":
             # Non cancer tiles are tiles that are in the tissue and not cancer
             non_c_mask_filtered = np.logical_not(
                 np.logical_and(np.logical_not(non_c_mask), np.logical_not(t_mask_filtered)))
+            verbose_print('Normal Slide Identified')
 
         # If Slide is cancerous
         if 'T' in PREFIX:
@@ -475,6 +497,7 @@ if __name__ == "__main__":
             # Cancer tile are tiles that are in the tissue and not cancer
             # Make sure all cancer tiles exist in the tissue mask
             c_mask_filtered = np.logical_not(np.logical_not(c_mask) & np.logical_not(t_mask_filtered))
+            verbose_print('Cancer Slide Identified')
 
             # Overlay masks onto TP53 and H&E Image
             overlay_tp53 = plot_masks(tp53_filtered, c_mask_filtered, t_mask_filtered, tile_size, u_mask_filtered)
@@ -483,27 +506,27 @@ if __name__ == "__main__":
             overlay_he = plot_masks(he_filtered, c_mask_filtered, t_mask_filtered, tile_size, u_mask_filtered)
             verbose_save_img(overlay_he.convert('RGB'), OUTPUT_PATH.joinpath(PREFIX + 'HE_overlay.jpeg'), 'JPEG')
 
-            ##############
-            # Save Tiles #
-            ##############
+        ##############
+        # Save Tiles #
+        ##############
 
-            # Make Directory to save tiles
-            TILES_PATH = OUTPUT_PATH.joinpath('tiles_' + str(TILE_MAG) + 'x')
-            os.makedirs(TILES_PATH, exist_ok=True)
+        # Make Directory to save tiles
+        TILES_PATH = OUTPUT_PATH.joinpath('tiles_' + str(TILE_MAG) + 'x')
+        os.makedirs(TILES_PATH, exist_ok=True)
 
-            # Save tiles
-            tgen = tile_gen_at_mag(he_slide, TILE_MAG, 299)
-            save_train_tiles(TILES_PATH, tgen, c_mask_filtered, t_mask_filtered, u_mask_filtered, prefix=PREFIX)
+        # Save tiles
+        tgen = tile_gen_at_mag(he_slide, TILE_MAG, OUTPUT_TILE_SIZE)
+        save_train_tiles(TILES_PATH, tgen, c_mask_filtered, t_mask_filtered, u_mask_filtered, prefix=PREFIX)
 
-            non_cancer_tiles = np.invert(non_c_mask_filtered).sum()
+        non_cancer_tiles = np.invert(non_c_mask_filtered).sum()
 
-            uncertain_tiles = np.invert(u_mask_filtered).sum()
+        uncertain_tiles = np.invert(u_mask_filtered).sum()
 
-            cancer_tiles = np.invert(c_mask_filtered).sum()
+        cancer_tiles = np.invert(c_mask_filtered).sum()
 
-            performance_df.loc[SLIDE_NUM, "Cancer_Tiles"] = cancer_tiles
-            performance_df.loc[SLIDE_NUM, "Uncertain_Tiles"] = uncertain_tiles
-            performance_df.loc[SLIDE_NUM, "Non_Cancer_Tiles"] = non_cancer_tiles
+        performance_df.loc[SLIDE_NUM, "Cancer_Tiles"] = cancer_tiles
+        performance_df.loc[SLIDE_NUM, "Uncertain_Tiles"] = uncertain_tiles
+        performance_df.loc[SLIDE_NUM, "Non_Cancer_Tiles"] = non_cancer_tiles
 
     performance_df.to_csv(OUTPUT_PATH.joinpath('performance_metrics.csv'))
 
