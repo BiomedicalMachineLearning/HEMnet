@@ -1,3 +1,4 @@
+import cv2 as cv
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -347,22 +348,22 @@ class PlotImageAlignment:
         draw = ImageDraw.Draw(mask)
         img_width, img_height = mask.size
         x_top_left, y_top_left = 0, 0
-        x_bottom_right, y_bottom_right = img_width, slice_width
+        x_bottom_right, y_bottom_right = img_width, self.px_spacing
         while y_top_left < img_height:
             draw.rectangle((x_top_left, y_top_left, x_bottom_right, y_bottom_right), fill=255)
-            y_top_left += slice_width * 2
-            y_bottom_right += slice_width * 2
+            y_top_left += self.px_spacing*2
+            y_bottom_right += self.px_spacing*2
         return mask
 
     def draw_vertical_mask(self, mask):
         draw = ImageDraw.Draw(mask)
         img_width, img_height = mask.size
         x_top_left, y_top_left = 0, 0
-        x_bottom_right, y_bottom_right = slice_width, img_height
+        x_bottom_right, y_bottom_right = self.px_spacing, img_height
         while x_top_left < img_width:
             draw.rectangle((x_top_left, y_top_left, x_bottom_right, y_bottom_right), fill=255)
-            x_top_left += slice_width * 2
-            x_bottom_right += slice_width * 2
+            x_top_left += self.px_spacing * 2
+            x_bottom_right += self.px_spacing * 2
         return mask
             
 ##################
@@ -467,6 +468,54 @@ def tissue_mask(img_filtered, tile_size, min_tissue = 0.25):
             mask.append(1)
     return np.reshape(mask, shape)
 
+def tissue_mask_grabcut(img_filtered, tile_size, min_tissue = 0.05):
+    """Generates a tissue mask where each tile has a minimum proportion of tissue 
+    
+    Uses the Grabcut Algorithm 
+    
+    Parameters
+    ----------
+    img_filtered : Pillow image (RGB)
+        image where background pixels are white - [255, 255, 255]
+    tile_size : int, float
+    min_tissue : float
+        proportion of tissue on a tile needed for the tile to be considered
+        tissue instead of background.
+    
+    Returns
+    -------
+    out : ndarray
+        mask where zero represents tissue and one represents background
+    """
+    img_cv = np.array(img_filtered)[:, :, ::-1]   #Convert RGB to BGR
+    mask_initial = (np.array(img_filtered.convert('L')) != 255).astype(np.uint8)
+    # Grabcut
+    bgdModel = np.zeros((1,65),np.float64)
+    fgdModel = np.zeros((1,65),np.float64)
+    cv.grabCut(img_cv, mask_initial, None, bgdModel, fgdModel, 5, cv.GC_INIT_WITH_MASK)
+    mask_final = np.where((mask_initial==2)|(mask_initial==0),0,1).astype('uint8')
+    # Generate a rough 'filled in' mask of the tissue
+    kernal_64 = cv.getStructuringElement(cv.MORPH_ELLIPSE, (64,64))
+    mask_closed = cv.morphologyEx(mask_final, cv.MORPH_CLOSE, kernal_64)
+    mask_opened = cv.morphologyEx(mask_closed, cv.MORPH_OPEN, kernal_64)
+    # Use rough mask to remove small debris in grabcut mask
+    mask_cleaned = cv.bitwise_and(mask_final, mask_final, mask = mask_opened)
+    mask_cleaned_pil = Image.fromarray(mask_cleaned.astype(np.bool))
+    # Generate tile mask
+    tile_mask = []
+    tgen = tile_gen(mask_cleaned_pil, tile_size)
+    shape = next(tgen)
+    for tile in tgen:
+        tile_np = np.array(tile)
+        tile_count = np.count_nonzero(tile_np)
+        total_pixels = tile_np.size
+        tissue_proportion = tile_count / total_pixels
+        if tissue_proportion > min_tissue:
+            tile_mask.append(0)
+        else:
+            tile_mask.append(1)
+    return np.reshape(tile_mask, shape)
+
 def cancer_mask(img, tile_size, cancer_thresh = 250):
     """Generates a cancer mask
 
@@ -525,7 +574,7 @@ def plot_mask(img, mask, tile_size):
         d.rectangle([(x_top_left, y_top_left), (x_bottom_right, y_bottom_right)], outline = outline, width = width)
     return img_overlay
 
-def plot_masks(img, c_mask, t_mask, tile_size, u_mask = None):
+def plot_masks(img, c_mask, t_mask, tile_size, u_mask = None, width_proportion = 0.03):
     """Plots cancer, tissue and uncertain (optional) masks onto an image
 
     Colours:
@@ -552,7 +601,7 @@ def plot_masks(img, c_mask, t_mask, tile_size, u_mask = None):
     tile_coords['t_mask'] = t_mask.ravel()
     if u_mask is not None:
         tile_coords['u_mask'] = u_mask.ravel()
-    width = int(np.round(tile_size*0.03))
+    width = int(np.round(tile_size*width_proportion))
     for row in tile_coords.itertuples(index = False):
         x_top_left, y_top_left = np.round(row[2:4])
         x_bottom_right, y_bottom_right = np.ceil(row[4:6])
