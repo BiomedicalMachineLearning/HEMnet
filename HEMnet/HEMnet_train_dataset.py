@@ -452,8 +452,8 @@ if __name__ == "__main__":
 
         # Generate cancer mask and tissue mask from filtered tp53 image
         c_mask = cancer_mask(tp53_filtered, tile_size, 250).astype(np.bool)
-        t_mask_tp53 = tissue_mask(tp53_filtered, tile_size)
-        t_mask_he = tissue_mask(he_filtered, tile_size)
+        t_mask_tp53 = tissue_mask_grabcut(tp53_filtered, tile_size)
+        t_mask_he = tissue_mask_grabcut(he_filtered, tile_size)
 
         # Generate tissue mask with tissue common to both the TP53 and H&E image
         t_mask = np.logical_not(np.logical_not(t_mask_tp53) & np.logical_not(t_mask_he))

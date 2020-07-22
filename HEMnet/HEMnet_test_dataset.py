@@ -195,6 +195,8 @@ if __name__ == "__main__":
                         help = 'Magnification for generating tiles')
     parser.add_argument('-a', '--align_mag', type = float, default = 2,
                         help = 'Magnification for aligning H&E and TP53 slide' )
+    parser.add_argument('-ts', '--tile_size', type=int, default=224,
+                        help='Output tile size in pixels')
     parser.add_argument('-n', '--normaliser', type=str, default='vahadane',
                         choices=['none', 'reinhard', 'macenko', 'vahadane'], help='H&E normalisation method')
     parser.add_argument('-std', '--standardise_luminosity', action='store_false',
@@ -228,6 +230,7 @@ if __name__ == "__main__":
     VERBOSE = args.verbosity
     NORMALISER_METHOD = args.normaliser
     STANDARDISE_LUMINOSITY = args.standardise_luminosity
+    OUTPUT_TILE_SIZE = args.tile_size
 
     # Verbose functions
     if VERBOSE:
@@ -474,18 +477,22 @@ if __name__ == "__main__":
         comparison_post_colour_overlay = show_alignment(he_filtered, tp53_filtered)
         verbose_save_img(comparison_post_colour_overlay.convert('RGB'),
                          OUTPUT_PATH.joinpath(PREFIX + 'comparison_post_align_colour_overlay.jpeg'), 'JPEG')
-
+        verbose_save_img(tp53_aligned.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + str(ALIGNMENT_MAG) + 'x_TP53_aligned.jpeg'), 'JPEG')
+        verbose_save_img(tp53_filtered.convert('RGB'),
+                         OUTPUT_PATH.joinpath(PREFIX + str(ALIGNMENT_MAG) + 'x_TP53_aligned_white.jpeg'), 'JPEG')
+        
         ####################################
         # Generate cancer and tissue masks #
         ####################################
 
         #Scale tile size for alignment mag
-        tile_size = 299 * ALIGNMENT_MAG / TILE_MAG
+        tile_size = OUTPUT_TILE_SIZE * ALIGNMENT_MAG / TILE_MAG
 
         # Generate cancer mask and tissue mask from filtered tp53 image
         c_mask = cancer_mask(tp53_filtered, tile_size, 250)
-        t_mask_tp53 = tissue_mask(tp53_filtered, tile_size)
-        t_mask_he = tissue_mask(he_filtered, tile_size)
+        t_mask_tp53 = tissue_mask_grabcut(tp53_filtered, tile_size)
+        t_mask_he = tissue_mask_grabcut(he_filtered, tile_size)
 
         # Generate tissue mask with tissue common to both the TP53 and H&E image
         t_mask = np.logical_not(np.logical_not(t_mask_tp53) & np.logical_not(t_mask_he))
@@ -522,7 +529,7 @@ if __name__ == "__main__":
         os.makedirs(TILES_PATH, exist_ok=True)
 
         # Save tiles
-        tgen = tile_gen_at_mag(he_slide, TILE_MAG, 299)
+        tgen = tile_gen_at_mag(he_slide, TILE_MAG, OUTPUT_TILE_SIZE)
         tile_counts = save_test_tiles(TILES_PATH, tgen, c_mask_filtered, t_mask_filtered, u_mask_filtered, prefix=PREFIX)
 
         tile_counts['slide_name'] = he_name
