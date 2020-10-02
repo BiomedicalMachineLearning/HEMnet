@@ -1,0 +1,5 @@
+name: HEMnet
+channels:
+  - defaults
+prefix: /home/s4436005/.conda/envs/HEMnet
+
