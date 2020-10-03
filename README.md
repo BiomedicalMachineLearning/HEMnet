@@ -1,3 +1,5 @@
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/BiomedicalMachineLearning/HEMnet/master?filepath=Development)
+
 # HEMnet - Haematoxylin & Eosin and Molecular neural network
 
 ## Description
