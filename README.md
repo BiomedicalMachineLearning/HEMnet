@@ -1,4 +1,5 @@
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/BiomedicalMachineLearning/HEMnet/master?filepath=Development)
+[![launch ImJoy](https://imjoy.io/static/badge/launch-imjoy-badge.svg)](https://imjoy.io/#/app?plugin=https://github.com/BiomedicalMachineLearning/HEMnet/blob/master/Demo/HEMnet_Tile_Predictor.imjoy.html)
 
 # HEMnet - Haematoxylin & Eosin and Molecular neural network
 
