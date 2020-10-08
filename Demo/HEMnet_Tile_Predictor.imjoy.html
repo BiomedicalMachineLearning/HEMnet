@@ -1,0 +1,167 @@
+﻿<docs>
+Demo of HEMnet tile prediction 
+
+Note: No H&E stain normalisation performed as this is done at the slide level
+</docs>
+
+<config lang="json">
+{
+  "name": "HEMnet Tile Predictor",
+  "type": "window",
+  "tags": [],
+  "ui": "A pretrained image classifier for 10x colon cancer whole slide image tiles",
+  "version": "0.1.0",
+  "cover": "",
+  "description": "A pretrained image classifier for 10x colon cancer whole slide image tiles",
+  "icon": "extension",
+  "inputs": null,
+  "outputs": null,
+  "api_version": "0.1.8",
+  "env": "",
+  "permissions": [],
+  "requirements": [
+    "https://unpkg.com/ml5@0.4.3/dist/ml5.min.js",
+    "https://unpkg.com/spectre.css/dist/spectre.min.css",
+    "https://unpkg.com/spectre.css/dist/spectre-exp.min.css",
+    "https://unpkg.com/spectre.css/dist/spectre-icons.min.css"
+  ],
+  "dependencies": []
+}
+</config>
+
+<script lang="javascript">
+class ImJoyPlugin {
+  async setup() {
+    api.log('initialized')
+
+    // bind predict() to the button
+    const predictBtn = document.getElementById('predict-btn');
+    predictBtn.onclick = ()=>{
+      this.predict()
+    }
+
+    // Display image when a file is selected
+    const fileInput = document.getElementById("file-input");
+    const canvas = document.getElementById("input-canvas");
+    const drawImage = (url, callback)=>{
+      var img = new Image()
+      img.crossOrigin = "anonymous"
+      img.onload = function(){
+          const ctx = canvas.getContext("2d");
+          canvas.width = Math.min(this.width, 512);
+          canvas.height = Math.min(this.height, parseInt(512 * this.height / this.width), 1024);
+          // draw img onto canvas
+          ctx.drawImage(this, 0, 0, canvas.width, canvas.height);
+          if(callback) callback(url);
+      }
+      img.src = url;
+    }
+    // load a present image
+    drawImage('https://raw.githubusercontent.com/BiomedicalMachineLearning/HEMnet/master/Demo/cancer_tile.jpeg')
+  
+
+  const readImageFile = ()=>{
+    return new Promise((resolve, reject)=>{
+        const U = window.URL || window.webkitURL;
+        // this works for safari
+        if(U.createObjectURL){
+            drawImage(U.createObjectURL(fileInput.files[0]), resolve)
+        }
+        // fallback
+        else{
+            var fr = new FileReader();
+            // when image is loaded, set the src of the image where you want to display it
+            fr.onload = function(e) {
+                drawImage(e.target.result, resolve)
+            };
+            fr.onerror = reject
+            // fill fr with image data
+            fr.readAsDataURL(fileInput.files[0]);
+        }
+    })
+  }
+
+  // If user selected a new file, load it and do prediction
+  fileInput.addEventListener("change", ()=>{
+      readImageFile().then(()=>{
+            this.predict();
+      })
+  }, true);
+
+  // Load the model.
+  const statusElement = document.getElementById("status");
+  statusElement.innerHTML = 'Loading pretrained model...';
+  this.model = await ml5.imageClassifier('https://raw.githubusercontent.com/BiomedicalMachineLearning/HEMnet/master/Demo/colorectal_cancer_model/model.json');
+
+  document.getElementById("hero_title").innerHTML = 'Model loaded'
+  statusElement.innerHTML = '1. Open tile image (.png/.jpg) or use pre-loaded tile image <br> 2. Click `Predict` for cancer prediction';
+
+  // Display the predict button and the file selection
+  predictBtn.style.display = "inline";
+  fileInput.style.display = "inline";
+
+  }
+
+async predict(){
+
+  const canvas = document.getElementById('input-canvas');
+
+  // Classify the image 
+  const predictions = await this.model.classify(canvas)
+
+  // Output results in console
+  console.log('Predictions', predictions);
+
+  // Output results in interface
+  document.getElementById("hero_title").innerHTML = 'Predictions: '
+
+  const result_string_html = `Output : ${predictions[0].confidence} <br> Interpretation : Values close to 0 mean cancer, Values close to 1 mean non-cancer`;
+  document.getElementById("status").innerHTML = result_string_html
+
+  // const result_string = `Output : ${predictions[0].confidence} <br> Interpretation : Values close to 0 mean cancer, Values close to 1 mean non-cancer;`;
+  // api.alert(result_string)
+
+}
+
+  run(my) {
+
+  }
+}
+
+api.export(new ImJoyPlugin())
+</script>
+
+<window lang='html'>
+  <div>
+    <!-- Header Bar -->
+    <div class="hero hero-sm bg-secondary">
+      <div class="mx-2">
+        <h3 id="hero_title"></h3>
+        <p id="status"></p>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="p-1">
+      <input style="display: none;" id="file-input" accept="image/*" type="file"/>
+      <br>
+      <button class="btn btn-primary" style="display: none;" id="predict-btn">Predict</button>
+    </div>
+
+    <!-- Canvas -->
+    <div class="p-1">
+      <canvas id="input-canvas" style="width: 100%; object-fit: cover;"></canvas>
+  </div>
+</window>
+
+<style lang="css">
+
+.p-1{
+  text-align: center;
+}
+
+.p-1 input{
+  width: 90%;
+  margin: 10px;
+}
+</style>
