@@ -8,19 +8,33 @@ A deep learning automated cancer diagnosis software using molecular labelling to
 Haematoxylin and Eosin (H&E) stained tissue. 
 
 ## Installation
-1. Build docker container
+1. Docker
 
-You can download and run the docker image using the following commands:
+    You can download and run the docker image using the following commands:
+    
+    ```
+    docker pull andrewsu1/hemnet    
+    docker run -it andrewsu1/hemnet
+    ```
+2. Conda 
+   
+   Create a conda environment from the `environment.yml` file
+   
+   ```
+   conda env create -f environment.yml
+   conda activate HEMnet
+   ```
+   
+    
 
-```
-docker pull andrewsu1/hemnet    
-docker run -it andrewsu1/hemnet
-```
 ## Usage
 ### Slide Preparation
+
 Name slides in the format: `slide_id_TP53` for TP53 slides and `slide_id_HandE` for H&E slides
 The `TP53` and `HandE` suffix is used by HEMnet to identify the stain used. 
+
 ### 1. Generate training dataset
+
 ### 2. Generate test dataset
 `python HEMnet_test_dataset.py -b /path/to/base/directory -s /relative/path/to/slides -o /relative/path/to/output/directory
  -t relative/path/to/template_slide -m tile_mag -a align_mag -c cancer_thresh -n non_cancer_thresh`
@@ -31,7 +45,8 @@ The `TP53` and `HandE` suffix is used by HEMnet to identify the stain used.
  To reduce computation time we recommend this be less than the tile magnification - a five times downscale generally works well.
  * `-c` cancer threshold to apply to the DAB channel. DAB intensities less than this threshold indicate cancer.
  * `-n` non-cancer threshold to apply to the DAB channel. DAB intensities greater than this threshold indicate no cancer. 
-### 3. Train model 
+### 3. Train model
+ 
 ### 4. Apply model to diagnose new images
 
 ## Results
