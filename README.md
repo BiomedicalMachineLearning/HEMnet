@@ -1,5 +1,6 @@
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/BiomedicalMachineLearning/HEMnet/master?filepath=Development)
 [![launch ImJoy](https://imjoy.io/static/badge/launch-imjoy-badge.svg)](https://imjoy.io/#/app?plugin=https://github.com/BiomedicalMachineLearning/HEMnet/blob/master/Demo/HEMnet_Tile_Predictor.imjoy.html)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/BiomedicalMachineLearning/HEMnet/blob/master/Demo/TCGA_Inference.ipynb)
 
 # HEMnet - Haematoxylin & Eosin and Molecular neural network
 
@@ -8,6 +9,7 @@ A deep learning automated cancer diagnosis software using molecular labelling to
 Haematoxylin and Eosin (H&E) stained tissue. 
 
 ## Installation
+
 1. Docker
 
     You can download and run the docker image using the following commands:
@@ -18,6 +20,8 @@ Haematoxylin and Eosin (H&E) stained tissue.
     ```
 2. Conda 
    
+   Install Openslide (this is necessary to open whole slide images) - download it [here](https://openslide.org/download/)
+   
    Create a conda environment from the `environment.yml` file
    
    ```
@@ -25,8 +29,6 @@ Haematoxylin and Eosin (H&E) stained tissue.
    conda activate HEMnet
    ```
    
-    
-
 ## Usage
 ### Slide Preparation
 
@@ -34,6 +36,9 @@ Name slides in the format: `slide_id_TP53` for TP53 slides and `slide_id_HandE` 
 The `TP53` and `HandE` suffix is used by HEMnet to identify the stain used. 
 
 ### 1. Generate training dataset
+
+`python HEMnet_train_dataset.py -b /path/to/base/directory -s relative/path/to/slides -o relative/path/to/output/directory 
+-t relative/path/to/template_slide.svs -v`
 
 ### 2. Generate test dataset
 `python HEMnet_test_dataset.py -b /path/to/base/directory -s /relative/path/to/slides -o /relative/path/to/output/directory
