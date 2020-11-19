@@ -35,25 +35,32 @@ Haematoxylin and Eosin (H&E) stained tissue.
 Name slides in the format: `slide_id_TP53` for TP53 slides and `slide_id_HandE` for H&E slides
 The `TP53` and `HandE` suffix is used by HEMnet to identify the stain used. 
 
-### 1. Generate training dataset
+### 1. Generate training and testing datasets 
+
+a. Generate train dataset
 
 `python HEMnet_train_dataset.py -b /path/to/base/directory -s relative/path/to/slides -o relative/path/to/output/directory 
 -t relative/path/to/template_slide.svs -v`
 
-### 2. Generate test dataset
+b. Generate test dataset
+
 `python HEMnet_test_dataset.py -b /path/to/base/directory -s /relative/path/to/slides -o /relative/path/to/output/directory
  -t relative/path/to/template_slide -m tile_mag -a align_mag -c cancer_thresh -n non_cancer_thresh`
- * `-t` is the relative path to the template slide from which all other slides will be normalised against. 
- This should be same as the template slide used for generating the train dataset. 
+ 
+ Other parameters:
+ * `-t` is the relative path to the template slide from which all other slides will be normalised against. The template 
+ slide should be the same for each step. 
  * `-m` is the tile magnification. e.g. if  the input is `10` then the tiles will be output at 10x
  * `-a` is the align magnification. Paired TP53 and H&E slides will be registered at this magnification. 
  To reduce computation time we recommend this be less than the tile magnification - a five times downscale generally works well.
  * `-c` cancer threshold to apply to the DAB channel. DAB intensities less than this threshold indicate cancer.
  * `-n` non-cancer threshold to apply to the DAB channel. DAB intensities greater than this threshold indicate no cancer. 
-### 3. Train model
+### 2. Train and evaluate model
  
-### 4. Apply model to diagnose new images
+### 3. Apply model to diagnose new images
+`python HEMnet_inference.py -s '/path/to/new/HE/Slides/' -o '/path/to/output/directory/' -t '/path/to/template/slide/' -nn '/path/to/trained/model/' -v`
 
+Predict on TCGA images with our pretrained model for colorectal cancer using [google colab](https://colab.research.google.com/github/BiomedicalMachineLearning/HEMnet/blob/master/Demo/TCGA_Inference.ipynb)
 ## Results
 
 ## Citing HEMnet
