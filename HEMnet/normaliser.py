@@ -164,7 +164,7 @@ class IterativeNormaliser:
         if standardise_luminosity:
             self.lum_std = LuminosityStandardizerIterative()
 
-    def fit_target(selfs, target_img):
+    def fit_target(self, target_img):
         if self.standardise_luminosity:
             target_std = self.lum_std.standardize(np.array(target_img))
         else:
@@ -179,7 +179,7 @@ class IterativeNormaliser:
         else:
             source_std = np.array(source_img)
         if self.method != 'none':
-            normaliser.fit_source(source_std)
+            self.normaliser.fit_source(source_std)
 
     def transform_tile(self, tile_img):
         if self.standardise_luminosity:
