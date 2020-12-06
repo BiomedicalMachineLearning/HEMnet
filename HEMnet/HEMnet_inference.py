@@ -98,7 +98,7 @@ if __name__ == "__main__":
     # parser.add_argument('-b', '--base_dir', type = Path, required = True,
     #                     help = 'Base Directory')
     parser.add_argument('-s', '--slides_dir', type=Path, default=Path(),
-                        help = 'Directory containing H&E and TP53 slides - relative to base directory')
+                        help = 'Directory containing H&E slides - relative to base directory')
     parser.add_argument('-o', '--out_dir', type=Path, default=Path(),
                         help = 'Output Directory - relative to base directory')
     parser.add_argument('-t', '--template_path', type = Path,
