@@ -166,11 +166,11 @@ class IterativeNormaliser:
 
     def fit_target(self, target_img):
         if self.standardise_luminosity:
-            target_std = self.lum_std.standardize(np.array(target_img))
+            self.target_std = self.lum_std.standardize(np.array(target_img))
         else:
-            target_std = np.array(target_img)
+            self.target_std = np.array(target_img)
         if self.method != 'none':
-            self.normaliser.fit_target(template_std)
+            self.normaliser.fit_target(self.target_std)
 
     def fit_source(self, source_img):
         if self.standardise_luminosity:
