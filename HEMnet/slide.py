@@ -9,13 +9,13 @@ import numpy as np
 def highest_mag(slide):
     """Returns the highest magnification for the slide
     """
-    return int(slide.get('openslide.objective-power'))
+    return int(slide.properties['openslide.objective-power'])
 
 def level_downsamples(slide):
     """List of downsamples for each level in a slide
     """
-    level_count = int(slide.get('openslide.level-count'))
-    return [float(slide.get(f'openslide.level[{x}].downsample')) for x in range(level_count)]
+    level_count = int(slide.level_count)
+    return [float(slide.level_downsamples[x]) for x in range(level_count)]
 
 def level_mags(slide):
     """Returns the magnification for each level in a slide
@@ -35,8 +35,8 @@ def get_level_mag(slide, level):
 def get_mpp(slide):
     """Get microns per pixel for a slide at highest mag. assuming pixels are square
     """
-    mpp_x = slide.get('openslide.mpp-x')
-    mpp_y = slide.get('openslide.mpp-y')
+    mpp_x = slide.properties['openslide.mpp-x']
+    mpp_y = slide.properties['openslide.mpp-y']
     assert mpp_x == mpp_y, "Pixels are not square : mpp_x not equal to mpp_y"
     return float(mpp_x)
 
