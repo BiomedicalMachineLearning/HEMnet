@@ -9,12 +9,18 @@ import numpy as np
 def highest_mag(slide):
     """Returns the highest magnification for the slide
     """
-    return int(slide.properties['aperio.AppMag'])
+    return int(slide.get('openslide.objective-power'))
+
+def level_downsamples(slide):
+    """List of downsamples for each level in a slide
+    """
+    level_count = int(slide.get('openslide.level-count'))
+    return [float(slide.get(f'openslide.level[{x}].downsample')) for x in range(level_count)]
 
 def level_mags(slide):
     """Returns the magnification for each level in a slide
     """
-    return [highest_mag(slide)/downsample for downsample in slide.level_downsamples]
+    return [highest_mag(slide)/downsample for downsample in level_downsamples(slide)]
 
 def get_level_size(slide, level):
     """Returns the dimensions of a level
@@ -25,6 +31,14 @@ def get_level_mag(slide, level):
     """Returns the magnification at a particular level
     """
     return level_mags(slide)[level]
+
+def get_mpp(slide):
+    """Get microns per pixel for a slide at highest mag. assuming pixels are square
+    """
+    mpp_x = slide.get('openslide.mpp-x')
+    mpp_y = slide.get('openslide.mpp-y')
+    assert mpp_x == mpp_y, "Pixels are not square : mpp_x not equal to mpp_y"
+    return float(mpp_x)
 
 def get_level_for_mag(slide, mag):
     """Get the level corresponding to a certain magnification, if available
