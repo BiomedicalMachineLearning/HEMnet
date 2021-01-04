@@ -33,7 +33,7 @@ if __name__ == "__main__":
                         help='pre-trained convolutional neural network base')
     parser.add_argument('-g', '--num_gpus', type=int, default=2,
                         help='Number of GPUs for training model')
-    parser.add_argument('-e', '--epochs', type=int, default=10,
+    parser.add_argument('-e', '--epochs', type=int, default=100,
                         help='Number of epochs for training model')
     parser.add_argument('-a', '--batch_size', type=int, default=32,
                         help='Number of tiles for each batch')
@@ -79,7 +79,10 @@ if __name__ == "__main__":
         verbose_save_img = lambda *args: None
         verbose_save_fig = lambda *args: None
 
-    HEMnet = HEMnetModel(cnn_base=CNN_BASE, num_gpus=NUM_GPUS)
+    HEMnet = HEMnetModel(cnn_base=CNN_BASE,
+                         num_gpus=NUM_GPUS,
+                         transfer_learning=TRANSFER_LEARNING,
+                         fine_tuning=FINE_TUNING)
     input_size = (HEMnet.get_input_shape()[0], HEMnet.get_input_shape()[1])
 
     train_datagen = ImageDataGenerator(rescale=1. / 255,

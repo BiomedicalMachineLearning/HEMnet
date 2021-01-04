@@ -5,3 +5,4 @@ TransformParameters.?.txt
 # Ignore HPC job error and output files
 *.e[0-9]*
 *.o[0-9]*
+.idea/
