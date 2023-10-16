@@ -4,21 +4,32 @@
 
 # HEMnet - Haematoxylin & Eosin and Molecular neural network
 
-## Description
-A deep learning automated cancer diagnosis software using molecular labelling to improve pathological annotation of 
-Haematoxylin and Eosin (H&E) stained tissue. 
+## Overview
+HEMnet predicts regions of cancer cells from standard Haematoxylin and Eosin (H&E) stained tumour tissue sections. It leverages molecular labelling - rather than time-consuming and variable pathologist annotations - to annotate H&E images used to train a neural network to predict cancer cells from H&E images alone. We trained HEMnet to predict colon cancer (try it out in our [Colab notebook](https://colab.research.google.com/github/BiomedicalMachineLearning/HEMnet/blob/master/Demo/TCGA_Inference.ipynb)), however, you can train HEMnet to predict other cancers where you have molecular staining for a cancer marker available. 
 
-## Installation
+![Overview of HEMnet workflow](https://github.com/BiomedicalMachineLearning/HEMnet/blob/master/Overview.jpg?raw=true)
 
-1. Docker
+## Getting Started
 
-    You can download and run the docker image using the following commands:
-    
+The easiest way to apply HEMnet is to use predict H&E images with our pretrained model for colorectal cancer using our [google colab notebook](https://colab.research.google.com/github/BiomedicalMachineLearning/HEMnet/blob/master/Demo/TCGA_Inference.ipynb). By default it downloads a slide from TCGA, however, you can also upload your own slide(s) in an `.svs` format.
+
+To train new models with HEMnet or predict on H&E images on your own machine, we recommend installing the HEMnet environment. 
+
+### Installation
+
+We recommend running HEMnet from our docker image for the simplest and most reliable setup. Alternatively, if you wish to setup a conda environment, we provide an [`environment.yml`](https://github.com/BiomedicalMachineLearning/HEMnet/blob/master/environment.yml) file.
+
+#### 1. Docker
+  
+  You can download the docker image and run the docker container using the following commands:
+
     ```
     docker pull andrewsu1/hemnet    
     docker run -it andrewsu1/hemnet
     ```
-2. Conda 
+The docker image contains a conda environment from which you can run HEMnet. 
+
+#### 2. Conda 
    
    Install Openslide (this is necessary to open whole slide images) - download it [here](https://openslide.org/download/)
    
@@ -95,10 +106,14 @@ Other parameters:
 ### 3. Apply model to diagnose new images
 `python HEMnet_inference.py -s '/path/to/new/HE/Slides/' -o '/path/to/output/directory/' -t '/path/to/template/slide/' -nn '/path/to/trained/model/' -v`
 
-Predict on TCGA images with our pretrained model for colorectal cancer using [google colab](https://colab.research.google.com/github/BiomedicalMachineLearning/HEMnet/blob/master/Demo/TCGA_Inference.ipynb)
-## Results
+
+## Data Availability
+
+Images used for training HEMnet can be downloaded from: https://dna-discovery.stanford.edu/publicmaterial/web-resources/HEMnet/images/
 
 ## Citing HEMnet
+
+Su, A., Lee, H., Tan, X. et al. A deep learning model for molecular label transfer that enables cancer cell identification from histopathology images. npj Precis. Onc. 6, 14 (2022). https://doi.org/10.1038/s41698-022-00252-0
 
 ## The Team
 Please contact Dr Quan Nguyen (quan.nguyen@uq.edu.au), Andrew Su (a.su@uqconnect.edu.au), 
