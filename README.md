@@ -116,7 +116,7 @@ Images used for training HEMnet can be downloaded from: https://dna-discovery.st
 Su, A., Lee, H., Tan, X. et al. A deep learning model for molecular label transfer that enables cancer cell identification from histopathology images. npj Precis. Onc. 6, 14 (2022). https://doi.org/10.1038/s41698-022-00252-0
 
 ## The Team
-Please contact Dr Quan Nguyen (quan.nguyen@uq.edu.au), Andrew Su (a.su@uqconnect.edu.au), 
+Please contact Dr Quan Nguyen (quan.nguyen@uq.edu.au), Dr. HoJoon Lee (hojoon@stanford.edu), Andrew Su (a.su@uqconnect.edu.au), 
 and Xiao Tan (xiao.tan@uqconnect.edu.au) for issues, suggestions, 
 and we are very welcome to collaboration opportunities.
 
